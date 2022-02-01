@@ -15,9 +15,8 @@ load_dotenv()
 
 app = Flask(__name__)
 
-line_bot_api = LineBotApi(
-    "0ox1ClSqR4iAM/lLIt7w97v3dzz0RNglAsMEXApRjkTgvoVYX42QXnaCd1Cy7/hn4kTHVXcccd1vOVo7/qpdb+KIb/YQIDE4uMQOWURK1k3gTZt3qRniAkk6U65zJ1uOVJ/gdQlZV8TIh3cISY7bawdB04t89/1O/w1cDnyilFU=")
-handler = WebhookHandler("54d522a64944f9b898f7b6fa429e656c")
+line_bot_api = LineBotApi(os.environ.get("CHANNEL_ACCESS_TOKEN", ""))
+handler = WebhookHandler(os.environ.get("CHANNEL_SECRET", ""))
 
 scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})
 
