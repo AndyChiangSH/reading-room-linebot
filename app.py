@@ -19,7 +19,6 @@ line_bot_api = LineBotApi(os.environ.get("CHANNEL_ACCESS_TOKEN", ""))
 handler = WebhookHandler(os.environ.get("CHANNEL_SECRET", ""))
 
 scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})
-is_running = False
 
 user_id = os.environ.get("USER_ID", "")
 
@@ -119,12 +118,10 @@ def push_message():
 
 
 def start_robot(event):
-    global scheduler, is_running
-    if not is_running:   # 關閉中
+    global scheduler
+    if not scheduler.running:   # 關閉中
         job = scheduler.add_job(push_message, 'interval', seconds=5)    # 新增工作
         scheduler.start()   # 啟動scheduler
-
-        is_running = True
         
         text = "嗶!機器人啟動中..."
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
@@ -134,12 +131,10 @@ def start_robot(event):
     
 
 def stop_robot(event):
-    global scheduler, is_running
-    if is_running:   # 啟動中
+    global scheduler
+    if scheduler.running:   # 啟動中
         scheduler.shutdown()    # 關閉scheduler
         scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})    # 創造新的scheduler
-
-        is_running = False
 
         text = "嗶!機器人關閉中..."
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
