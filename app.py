@@ -18,8 +18,6 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.environ.get("CHANNEL_ACCESS_TOKEN", ""))
 handler = WebhookHandler(os.environ.get("CHANNEL_SECRET", ""))
 
-scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})
-
 user_id = os.environ.get("USER_ID", "")
 
 # 首頁
@@ -145,4 +143,5 @@ def stop_robot(event):
 
 
 if __name__ == "__main__":
+    scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})
     app.run(debug=True)
