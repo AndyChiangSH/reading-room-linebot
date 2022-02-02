@@ -9,6 +9,8 @@ import os
 import datetime
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
+import psycopg2
+
 
 # load environment var
 load_dotenv()
@@ -19,8 +21,6 @@ line_bot_api = LineBotApi(os.environ.get("CHANNEL_ACCESS_TOKEN", ""))
 handler = WebhookHandler(os.environ.get("CHANNEL_SECRET", ""))
 
 scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})
-
-user_id = os.environ.get("USER_ID", "")
 
 # 首頁
 @app.route("/")
@@ -45,21 +45,58 @@ def callback():
         abort(400)
 
     return 'OK'
-
+    
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     mtext = event.message.text
+    user_id = event.source.user_id
     print("mtext:", mtext)
+    print("user_id:", user_id)
 
+    sql_cmd = f"SELECT * FROM users WHERE uid='{user_id}'"
+    cursor.execute(sql_cmd)
+    data = cursor.fetchone()
+    print(data)
+    if data == None:
+        sql_cmd = f"INSERT INTO users (uid, state) values ('{user_id}', FALSE)"
+        cursor.execute(sql_cmd)
+        conn.commit()
+        state = False
+    else:
+        state = data[1]
+    
     if mtext == "#使用說明":
         reply_instruction(event)
     elif mtext == "#現在人數":
         reply_number_now(event)
     elif mtext == "#啟動機器人":
-        start_robot(event)
+        if state:
+            text = "嗶嗶!機器人已啟動!"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
+        else:
+            start_robot(event)
+
+            sql_cmd = f"UPDATE users SET state=TRUE WHERE uid='{user_id}'"
+            cursor.execute(sql_cmd)
+            conn.commit()
+
+            text = "嗶!機器人啟動中..."
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
     elif mtext == "#關閉機器人":
-        stop_robot(event)
+        if state:
+            stop_robot(event)
+
+            sql_cmd = f"UPDATE users SET state=FALSE WHERE uid='{user_id}'"
+            cursor.execute(sql_cmd)
+            conn.commit()
+
+            text = "嗶!機器人關閉中..."
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
+        else:
+            text = "嗶嗶!機器人已關閉!"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
+
 
     # line_bot_api.reply_message(
     #     event.reply_token, TextSendMessage(text=event.message.text))
@@ -102,6 +139,7 @@ def reply_number_now(event):
     print(now_format)
 
     text = f"{now_format} 人數: {total_number}"
+    
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
 
 
@@ -114,34 +152,64 @@ def push_message():
     print(now_format)
 
     text = f"{now_format} 人數: {total_number}"
-    line_bot_api.push_message(user_id, TextSendMessage(text=text))   # 推播通知
+
+    sql_cmd = f"SELECT * FROM users"
+    cursor.execute(sql_cmd)
+    datas = cursor.fetchall()
+    print(datas)
+
+    for data in datas:
+        user_id = data[0]
+        state = data[1]
+        if state:
+            line_bot_api.push_message(user_id, TextSendMessage(text=text))   # 推播通知
+
+
+def is_others_use(user_id):
+    sql_cmd = f"SELECT * FROM users WHERE uid!='{user_id}'"
+    cursor.execute(sql_cmd)
+    datas = cursor.fetchall()
+    print(datas)
+
+    for data in datas:
+        if data[1]:
+            return True
+    
+    return False
 
 
 def start_robot(event):
     global scheduler
     if not scheduler.running:   # 關閉中
-        job = scheduler.add_job(push_message, 'interval', seconds=5)    # 新增工作
+        print("Real start!")
+        job = scheduler.add_job(push_message, 'interval', seconds=10)    # 新增工作
         scheduler.start()   # 啟動scheduler
-        
-        text = "嗶!機器人啟動中..."
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
-    else:   # 啟動中
-        text = "嗶嗶!機器人已啟動!"
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
     
 
 def stop_robot(event):
     global scheduler
-    if scheduler.running:   # 啟動中
+    if scheduler.running and not is_others_use(event.source.user_id):   # 啟動中且沒有其他人使用
+        print("Real stop!")
         scheduler.shutdown()    # 關閉scheduler
         scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})    # 創造新的scheduler
 
-        text = "嗶!機器人關閉中..."
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
-    else:
-        text = "嗶嗶!機器人已關閉!"
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
-
 
 if __name__ == "__main__":
+    DATABASE_URL = os.environ.get("DATABASE_URL", "")
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+
+    sql_cmd = """
+    CREATE TABLE IF NOT EXISTS users (
+        uid varchar(50) NOT NULL,
+        state boolean NOT NULL,
+        PRIMARY KEY (uid)
+    );
+    """
+    cursor.execute(sql_cmd)
+    conn.commit()
+
     app.run(debug=True)
+
+    cursor.close()
+    conn.close()
