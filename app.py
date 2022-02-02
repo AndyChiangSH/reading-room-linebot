@@ -22,6 +22,19 @@ handler = WebhookHandler(os.environ.get("CHANNEL_SECRET", ""))
 
 scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})
 
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+conn = psycopg2.connect(DATABASE_URL)
+cursor = conn.cursor()
+sql_cmd = """
+CREATE TABLE IF NOT EXISTS users (
+    uid varchar(50) NOT NULL,
+    state boolean NOT NULL,
+    PRIMARY KEY (uid)
+);
+"""
+cursor.execute(sql_cmd)
+conn.commit()
+
 # 首頁
 @app.route("/")
 def index():
@@ -195,20 +208,6 @@ def stop_robot(event):
 
 
 if __name__ == "__main__":
-    DATABASE_URL = os.environ.get("DATABASE_URL", "")
-    conn = psycopg2.connect(DATABASE_URL)
-    cursor = conn.cursor()
-
-    sql_cmd = """
-    CREATE TABLE IF NOT EXISTS users (
-        uid varchar(50) NOT NULL,
-        state boolean NOT NULL,
-        PRIMARY KEY (uid)
-    );
-    """
-    cursor.execute(sql_cmd)
-    conn.commit()
-
     app.run(debug=True)
 
     cursor.close()
