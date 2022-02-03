@@ -1,3 +1,7 @@
+# 自習室人數機器人
+# 作者: 江尚軒
+# 時間: 2022/02/03
+
 from flask import Flask
 from flask import request, abort
 from linebot import LineBotApi, WebhookHandler
@@ -14,11 +18,14 @@ import psycopg2
 # load environment var
 load_dotenv()
 
+# Flask app
 app = Flask(__name__)
 
+# line bot api
 line_bot_api = LineBotApi(os.environ.get("CHANNEL_ACCESS_TOKEN", ""))
 handler = WebhookHandler(os.environ.get("CHANNEL_SECRET", ""))
 
+# connect to database
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 conn = psycopg2.connect(DATABASE_URL)
 cursor = conn.cursor()
@@ -32,12 +39,14 @@ CREATE TABLE IF NOT EXISTS users (
 cursor.execute(sql_cmd)
 conn.commit()
 
+
 # 首頁
 @app.route("/")
 def index():
     return "Server OK!"
 
 
+# Callback
 @app.route("/callback", methods=['POST'])
 def callback():
     # get X-Line-Signature header value
@@ -57,17 +66,20 @@ def callback():
     return 'OK'
 
 
+# 整點廣播通知自習室人數
 @app.route("/push")
 def push_message():
-    total_number = get_number() # 取得人數
-    print(total_number)
+    # 取得人數
+    total_number = get_number()
 
-    now = datetime.datetime.now() + datetime.timedelta(hours=int(os.environ.get("TIMEZONE", 8))) # 現在時間(時區+8)
+    # 現在時間(時區+8)
+    now = datetime.datetime.now() + datetime.timedelta(hours=int(os.environ.get("TIMEZONE", 8)))
     now_format = now.strftime("%Y/%m/%d %H:%M")
-    print(now_format)
 
     text = f"{now_format} 人數: {total_number}"
+    print(text)
 
+    # 從資料庫取得所有使用者
     sql_cmd = f"SELECT * FROM users"
     cursor.execute(sql_cmd)
     datas = cursor.fetchall()
@@ -76,7 +88,7 @@ def push_message():
     for data in datas:
         user_id = data[0]
         state = data[1]
-        if state:
+        if state:   # 如果使用者狀態為啟動
             line_bot_api.push_message(user_id, TextSendMessage(text=text))   # 推播通知
     
     return "push OK!"
@@ -84,21 +96,22 @@ def push_message():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    mtext = event.message.text
-    user_id = event.source.user_id
+    mtext = event.message.text  # 訊息
+    user_id = event.source.user_id  # 使用者ID
     print("mtext:", mtext)
     print("user_id:", user_id)
 
+    # 取得使用者狀態
     sql_cmd = f"SELECT * FROM users WHERE uid='{user_id}'"
     cursor.execute(sql_cmd)
     data = cursor.fetchone()
     print(data)
-    if data == None:
-        sql_cmd = f"INSERT INTO users (uid, state) values ('{user_id}', FALSE)"
+    if data == None:    # 沒有該使用者
+        sql_cmd = f"INSERT INTO users (uid, state) values ('{user_id}', FALSE)" # 新增使用者
         cursor.execute(sql_cmd)
         conn.commit()
         state = False
-    else:
+    else:   # 有該使用者
         state = data[1]
     
     if mtext == "#使用說明":
@@ -106,10 +119,10 @@ def handle_message(event):
     elif mtext == "#現在人數":
         reply_number_now(event)
     elif mtext == "#啟動機器人":
-        if state:
+        if state:   # 已經啟動
             text = "嗶!機器人已啟動!"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
-        else:
+        else:       # 尚未啟動
             sql_cmd = f"UPDATE users SET state=TRUE WHERE uid='{user_id}'"
             cursor.execute(sql_cmd)
             conn.commit()
@@ -117,14 +130,14 @@ def handle_message(event):
             text = "機器人正在啟動中..."
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
     elif mtext == "#關閉機器人":
-        if state:
+        if state:   # 尚未關閉
             sql_cmd = f"UPDATE users SET state=FALSE WHERE uid='{user_id}'"
             cursor.execute(sql_cmd)
             conn.commit()
 
             text = "機器人正在關閉中..."
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
-        else:
+        else:       # 已經關閉
             text = "嗶!機器人已關閉!"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
     else:
@@ -142,6 +155,8 @@ def reply_instruction(event):
 
 
 def get_number():
+    # load environment var
+    load_dotenv()
     total_seat = int(os.environ.get("TOTAL_SEAT", 160))
     # print(total_seat)
 
@@ -163,14 +178,15 @@ def get_number():
 
 
 def reply_number_now(event):
-    total_number = get_number() # 取得人數
-    print(total_number)
+    # 取得人數
+    total_number = get_number()
     
-    now = datetime.datetime.now() + datetime.timedelta(hours=int(os.environ.get("TIMEZONE", 8))) # 現在時間(時區+8)
+    # 現在時間(時區+8)
+    now = datetime.datetime.now() + datetime.timedelta(hours=int(os.environ.get("TIMEZONE", 8)))
     now_format = now.strftime("%Y/%m/%d %H:%M")
-    print(now_format)
 
     text = f"{now_format} 人數: {total_number}"
+    print(text)
     
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
 
