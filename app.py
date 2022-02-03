@@ -78,6 +78,8 @@ def push_message():
         state = data[1]
         if state:
             line_bot_api.push_message(user_id, TextSendMessage(text=text))   # 推播通知
+    
+    return "push OK!"
 
 
 @handler.add(MessageEvent, message=TextMessage)
