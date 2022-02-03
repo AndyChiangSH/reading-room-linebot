@@ -195,7 +195,7 @@ def start_robot(event):
     global scheduler
     if not scheduler.running:   # 關閉中
         print("Real start!")
-        job = scheduler.add_job(push_message, 'interval', seconds=10)    # 新增工作
+        job = scheduler.add_job(push_message, 'cron', minute=0)    # 新增工作
         scheduler.start()   # 啟動scheduler
     
 
