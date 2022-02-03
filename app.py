@@ -8,7 +8,6 @@ from bs4 import BeautifulSoup
 import os
 import datetime
 from dotenv import load_dotenv
-from apscheduler.schedulers.background import BackgroundScheduler
 import psycopg2
 
 
@@ -19,8 +18,6 @@ app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.environ.get("CHANNEL_ACCESS_TOKEN", ""))
 handler = WebhookHandler(os.environ.get("CHANNEL_SECRET", ""))
-
-scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 conn = psycopg2.connect(DATABASE_URL)
@@ -58,7 +55,30 @@ def callback():
         abort(400)
 
     return 'OK'
-    
+
+
+@app.route("/push")
+def push_message():
+    total_number = get_number() # 取得人數
+    print(total_number)
+
+    now = datetime.datetime.now() + datetime.timedelta(hours=int(os.environ.get("TIMEZONE", 8))) # 現在時間(時區+8)
+    now_format = now.strftime("%Y/%m/%d %H:%M")
+    print(now_format)
+
+    text = f"{now_format} 人數: {total_number}"
+
+    sql_cmd = f"SELECT * FROM users"
+    cursor.execute(sql_cmd)
+    datas = cursor.fetchall()
+    print(datas)
+
+    for data in datas:
+        user_id = data[0]
+        state = data[1]
+        if state:
+            line_bot_api.push_message(user_id, TextSendMessage(text=text))   # 推播通知
+
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -85,34 +105,29 @@ def handle_message(event):
         reply_number_now(event)
     elif mtext == "#啟動機器人":
         if state:
-            text = "嗶嗶!機器人已啟動!"
+            text = "嗶!機器人已啟動!"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
         else:
-            start_robot(event)
-
             sql_cmd = f"UPDATE users SET state=TRUE WHERE uid='{user_id}'"
             cursor.execute(sql_cmd)
             conn.commit()
 
-            text = "嗶!機器人啟動中..."
+            text = "機器人正在啟動中..."
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
     elif mtext == "#關閉機器人":
         if state:
-            stop_robot(event)
-
             sql_cmd = f"UPDATE users SET state=FALSE WHERE uid='{user_id}'"
             cursor.execute(sql_cmd)
             conn.commit()
 
-            text = "嗶!機器人關閉中..."
+            text = "機器人正在關閉中..."
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
         else:
-            text = "嗶嗶!機器人已關閉!"
+            text = "嗶!機器人已關閉!"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
-
-
-    # line_bot_api.reply_message(
-    #     event.reply_token, TextSendMessage(text=event.message.text))
+    else:
+        text = "未知指令，請使用選單呼叫指令!"
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
 
 
 def reply_instruction(event):
@@ -122,6 +137,7 @@ def reply_instruction(event):
 4. 因為本服務架在免費平台上，運行時間是有限制的，所以希望大家上班時啟動，下班時關閉。"""
 
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
+
 
 def get_number():
     total_seat = int(os.environ.get("TOTAL_SEAT", 160))
@@ -143,6 +159,7 @@ def get_number():
     
     return total_number
 
+
 def reply_number_now(event):
     total_number = get_number() # 取得人數
     print(total_number)
@@ -154,57 +171,6 @@ def reply_number_now(event):
     text = f"{now_format} 人數: {total_number}"
     
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
-
-
-def push_message():
-    total_number = get_number() # 取得人數
-    print(total_number)
-
-    now = datetime.datetime.now() + datetime.timedelta(hours=int(os.environ.get("TIMEZONE", 8))) # 現在時間(時區+8)
-    now_format = now.strftime("%Y/%m/%d %H:%M")
-    print(now_format)
-
-    text = f"{now_format} 人數: {total_number}"
-
-    sql_cmd = f"SELECT * FROM users"
-    cursor.execute(sql_cmd)
-    datas = cursor.fetchall()
-    print(datas)
-
-    for data in datas:
-        user_id = data[0]
-        state = data[1]
-        if state:
-            line_bot_api.push_message(user_id, TextSendMessage(text=text))   # 推播通知
-
-
-def is_others_use(user_id):
-    sql_cmd = f"SELECT * FROM users WHERE uid!='{user_id}'"
-    cursor.execute(sql_cmd)
-    datas = cursor.fetchall()
-    print(datas)
-
-    for data in datas:
-        if data[1]:
-            return True
-    
-    return False
-
-
-def start_robot(event):
-    global scheduler
-    if not scheduler.running:   # 關閉中
-        print("Real start!")
-        job = scheduler.add_job(push_message, 'cron', minute=0)    # 新增工作
-        scheduler.start()   # 啟動scheduler
-    
-
-def stop_robot(event):
-    global scheduler
-    if scheduler.running and not is_others_use(event.source.user_id):   # 啟動中且沒有其他人使用
-        print("Real stop!")
-        scheduler.shutdown()    # 關閉scheduler
-        scheduler = BackgroundScheduler({'apscheduler.timezone': 'Asia/Taipei'})    # 創造新的scheduler
 
 
 if __name__ == "__main__":
