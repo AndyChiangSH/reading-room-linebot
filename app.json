@@ -1,0 +1,25 @@
+{
+    "name": "reading-room-linebot",
+    "description": "自習室數人數Linebot",
+    "repository": "https://github.com/AndyChiangSH/reading-room-linebot",
+    "env": {
+        "CHANNEL_ACCESS_TOKEN": {
+            "description": "你的Linebot channel access token"
+        },
+        "CHANNEL_SECRET": {
+            "description": "你的Linebot channel secret"
+        },
+        "TIMEZONE": {
+            "description": "時差(預設為8)",
+            "value": "8"
+        },
+        "TOTAL_SEAT": {
+            "description": "自習室總座位數量(預設為160)",
+            "value": "160"
+        }
+    },
+    "addons": [
+        "heroku-postgresql:hobby-dev"
+    ],
+    "success_url": "/"
+}
